@@ -41,7 +41,6 @@ def build_and_run(datasets, build_function, lumi_tree = "LuminosityBlocks", even
     results = []
     hweights = []
     evtcounts = []
-    chains = []
     lumidfs = []
     lumisums = {}
 
@@ -52,15 +51,16 @@ def build_and_run(datasets, build_function, lumi_tree = "LuminosityBlocks", even
         if dataset.lumi_json is not None:
            jsonhelper = make_jsonhelper(dataset.lumi_json)
 
+        # RDataFrame from the tree name and the file list rather than from a TChain: it reads
+        # TTree and RNTuple files alike (the NanoAOD can be written as RNTuple from
+        # NanoV15_v1.5), whereas a TChain only reads TTrees (and crashes on an RNTuple file)
+        filepaths = list(dataset.filepaths)
+
         if dataset.is_data and dataset.lumi_csv is not None:
-            chain = ROOT.TChain(lumi_tree)
-            for fpath in dataset.filepaths:
-                chain.Add(fpath)
-            chains.append(chain)
             print("making lumi helper")
             lumihelper = make_lumihelper(dataset.lumi_csv)
             print("making df")
-            lumidf = ROOT.ROOT.RDataFrame(chain)
+            lumidf = ROOT.ROOT.RDataFrame(lumi_tree, filepaths)
             lumidfs.append(lumidf)
             if jsonhelper is not None:
                 print("adding lumi filter")
@@ -73,16 +73,8 @@ def build_and_run(datasets, build_function, lumi_tree = "LuminosityBlocks", even
             print("add to dict")
             lumisums[dataset.name] = lumisum
 
-        print("event chain")
-        chain = ROOT.TChain(event_tree)
-        for fpath in dataset.filepaths:
-            chain.Add(fpath)
-
-        # black magic why this needs to be protected from gc
-        chains.append(chain)
-
         print("event df")
-        df = ROOT.ROOT.RDataFrame(chain)
+        df = ROOT.ROOT.RDataFrame(event_tree, filepaths)
         dfs.append(df)
         if jsonhelper is not None:
             df = df.Filter(jsonhelper, [run_col, lumi_col], "jsonhelper")
